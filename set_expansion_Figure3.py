@@ -1,19 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Apr 26 08:54:17 2021
-
-@author: maoran
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import hamiltorch
-
+hamiltorch.set_random_seed(100)
 def prox(beta, lam, A, b):
     """
-    
     args: 
         beta: the continuous variable, a p-vector
         lam: the scalar param in proximal mapping 
@@ -38,13 +29,13 @@ a1 = 1.
 a2 = 1.
 a3 = 1.
 a4 = 1.
-n = 100
+n = 20
 A=torch.tensor([a1,a2,a3])
 b = torch.tensor(a4)
 lam = torch.tensor(2.)
 
 from mpl_toolkits.mplot3d import Axes3D
-plt3d = plt.figure().gca(projection='3d', azim = -88, elev = 21)
+plt3d = plt.figure().gca(projection='3d', azim = -88, elev = 15)
 #plt3d.hold(True)
 
 X,Y = np.meshgrid(np.linspace(-7,7,10),np.linspace(-7,7,10))
@@ -64,38 +55,42 @@ def llh(beta):
     theta = prox(beta, lam, A, b)
     return(-(torch.norm(y-theta)**2/9+torch.norm(beta)**2/9.))
 
-params = torch.tensor([-1.,-1.,-1.])
+params = torch.tensor([0.,0.,0.])
 hamiltorch.set_random_seed(1)
-params =hamiltorch.sample(log_prob_func=llh, params_init = params,  num_samples=3000, step_size=.1, num_steps_per_sample=100)
-
-n=500
+params_hmc_nuts = hamiltorch.sample(log_prob_func=llh,
+                                    params_init = params, num_samples= 3000,
+                                    step_size=.1, num_steps_per_sample=2, desired_accept_rate=.6,
+                                    sampler=hamiltorch.Sampler.HMC_NUTS,burn=1000,verbose=False
+                                   )
+n=150
 theta = torch.zeros([n, p])
 beta_ = torch.zeros([n, p])
 for i in range(n):
-    theta[i] = prox(params[i+500], lam, A, b)
-    beta_[i] = params[i+500]
+    theta[i] = prox(params_hmc_nuts[i], lam, A, b)
+    beta_[i] = params_hmc_nuts[i]
 
 dist = torch.zeros(n)
 for i in range(n):
     pbeta = beta_[i] - 1 / torch.norm(A) ** 2 * A.T * (A@beta_[i] - b)
     dist[i] = torch.norm((pbeta - beta_[i])) 
-idx = dist > 2 
-idx1 = dist <=2   
+idx = dist > lam
+idx1 = dist <= lam  
     
-plt3d = plt.figure().gca(projection='3d', azim = -88, elev = 21)
+plt3d = plt.figure().gca(projection='3d', azim = -88, elev = 11)
+x = np.linspace(-3,1,10)
+y = np.linspace(-1.,2., 10)
+X,Y = np.meshgrid(x,y)
+Z = (a4 - a1*X - a2*Y) / a3
+plt3d.plot_surface(X, Y, Z, color = 'skyblue', alpha=.2)
 plt3d.scatter(theta[idx1,0], theta[idx1,1], theta[idx1,2],c = 'orange', s=50,edgecolors= "black")
 
 plt3d.plot_surface(X, Y, Z, color = 'skyblue', alpha=.2)
 
 plt3d.scatter(theta[idx,0], theta[idx,1], theta[idx,2] , s=40 ,edgecolors= "black")
+
 plt.show()
 
 
-x = np.linspace(-2,1.,10)
-y = np.linspace(-1.,2, 10)
-X,Y = np.meshgrid(x,y)
-Z = (a4 - a1*X - a2*Y) / a3
-plt3d.plot_surface(X, Y, Z, color = 'skyblue', alpha=.2)
 
 
 
